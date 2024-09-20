@@ -14,14 +14,18 @@ impl BuildHasher for NonRandomState {
     fn build_hasher(&self) -> Self::Hasher { Self::Hasher::default() }
 }
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct HashMap<K, V> (pub _HashMap<K, V, NonRandomState>);
 
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Clone)]
 pub struct HashSet<T> (pub _HashSet<T, NonRandomState>);
 
 macro_rules! implement {
     ($base: ident $id: ident, $($t:tt)*) => {
+        impl<$($t)*> Default for $id<$($t)*> {
+            fn default() -> Self { Self($base::default()) }
+        }
+
         impl<$($t)*> core::ops::Deref for $id<$($t)*> {
             type Target = $base<$($t)*, NonRandomState>;
 
@@ -34,6 +38,13 @@ macro_rules! implement {
             fn deref_mut(&mut self) -> &mut $base<$($t)*, NonRandomState> {
                 &mut self.0
             }
+        }
+
+        impl<'a, $($t)*> core::iter::IntoIterator for &'a $id<$($t)*> {
+            type Item = <&'a $base<$($t)*, NonRandomState> as core::iter::IntoIterator>::Item;
+            type IntoIter = <&'a $base<$($t)*, NonRandomState> as core::iter::IntoIterator>::IntoIter;
+
+            fn into_iter(self) -> Self::IntoIter { (&self.0).into_iter() }
         }
 
         impl<$($t)*> core::iter::IntoIterator for $id<$($t)*> {
@@ -55,8 +66,10 @@ macro_rules! implement {
     };
 }
 
-implement!(_HashMap HashMap, K, V);
+// --- HashSet ---
 implement!(_HashSet HashSet, T);
+
+impl<T: Eq + Hash> core::cmp::Eq for HashSet<T> {}
 
 impl<T: Eq + Hash> core::cmp::PartialEq<_HashSet<T, NonRandomState>> for HashSet<T> {
     fn eq(&self, other: &_HashSet<T, NonRandomState>) -> bool { self.0 == *other }
@@ -67,6 +80,37 @@ impl<T: Eq + Hash> core::cmp::PartialEq<HashSet<T>> for HashSet<T> {
     fn eq(&self, other: &HashSet<T>) -> bool { self.0 == other.0 }
     fn ne(&self, other: &HashSet<T>) -> bool { self.0 != other.0 }
 }
+
+impl<'a, T: 'a + Eq + Hash + Copy> Extend<&'a T> for HashSet<T> {
+    #[inline]
+    fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
+        self.0.extend(iter.into_iter().cloned());
+    }
+}
+
+impl<T: Eq + Hash> Extend<T> for HashSet<T> {
+    #[inline]
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        self.0.extend(iter);
+    }
+}
+
+impl<T: Eq + Hash, const N: usize> From<[T; N]> for HashSet<T> {
+    fn from(value: [T; N]) -> Self {
+        Self::from_iter(value)
+    }
+}
+
+impl<T: Eq + Hash> FromIterator<T> for HashSet<T> {
+    fn from_iter<I: IntoIterator<Item = T>>(iter: I) -> Self {
+        Self(_HashSet::from_iter(iter))
+    }
+}
+
+// --- HashMap ---
+implement!(_HashMap HashMap, K, V);
+
+impl<K: Eq + Hash, V: PartialEq> core::cmp::Eq for HashMap<K, V> {}
 
 impl<K: Eq + Hash, V: PartialEq> core::cmp::PartialEq<_HashMap<K, V, NonRandomState>> for HashMap<K, V> {
     fn eq(&self, other: &_HashMap<K, V, NonRandomState>) -> bool { self.0 == *other }
@@ -81,6 +125,32 @@ impl<K: Eq + Hash, V: PartialEq> core::cmp::PartialEq<HashMap<K, V>> for HashMap
 impl<K, V> HashMap<K, V> {
     pub fn into_keys(self) -> IntoKeys<K, V> { self.0.into_keys() }
     pub fn into_values(self) -> IntoValues<K, V> { self.0.into_values() }
+}
+
+impl<'a, K: Eq + Hash + Copy, V: Copy> Extend<(&'a K, &'a V)> for HashMap<K, V> {
+    #[inline]
+    fn extend<I: IntoIterator<Item = (&'a K, &'a V)>>(&mut self, iter: I) {
+        self.0.extend(iter.into_iter().map(|(k, v)| (*k, *v)));
+    }
+}
+
+impl<K: Eq + Hash, V> Extend<(K, V)> for HashMap<K, V> {
+    #[inline]
+    fn extend<I: IntoIterator<Item = (K, V)>>(&mut self, iter: I) {
+        self.0.extend(iter);
+    }
+}
+
+impl<K: Eq + Hash, V, const N: usize> From<[(K, V); N]> for HashMap<K, V> {
+    fn from(value: [(K, V); N]) -> Self {
+        Self::from_iter(value)
+    }
+}
+
+impl<K: Eq + Hash, V> FromIterator<(K, V)> for HashMap<K, V> {
+    fn from_iter<I: IntoIterator<Item = (K, V)>>(iter: I) -> Self {
+        Self(_HashMap::from_iter(iter))
+    }
 }
 
 #[cfg(test)]
