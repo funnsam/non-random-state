@@ -1,0 +1,11 @@
+[package]
+name = "non-random-state"
+version = "0.1.0"
+edition = "2021"
+description = "Deterministic HashMap and HashSets"
+documentation = "https://docs.rs/non-random-state"
+readme = "README.md"
+repository = "https://github.com/funnsam/non-random-state"
+license = "BSD-2"
+
+[dependencies]
